@@ -204,6 +204,12 @@ class ClientArguments {
     allOptions.addOption("tfEvaluator", "tf-evaluator", true,
         "Using the evaluator during the tensorflow distribute training.");
 
+      allOptions.addOption("keytab", "keytab", false,
+              "Using the kerberos keytab during the distribute training.");
+
+      allOptions.addOption("principal", "principal", false,
+              "Using the kerberos principal during the distribute training.");
+
     allOptions.addOption("help", "help", false, "Print usage");
 
 

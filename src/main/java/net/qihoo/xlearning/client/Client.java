@@ -764,15 +764,16 @@ public class Client {
     capability.setMemory(conf.getInt(XLearningConfiguration.XLEARNING_AM_MEMORY, XLearningConfiguration.DEFAULT_XLEARNING_AM_MEMORY));
     capability.setVirtualCores(conf.getInt(XLearningConfiguration.XLEARNING_AM_CORES, XLearningConfiguration.DEFAULT_XLEARNING_AM_CORES));
     applicationContext.setResource(capability);
-    URI url = null;
+    ByteBuffer tokens = null;
     try {
-      url = new java.net.URI(conf.get(XLearningConfiguration.XLEARNING_KERBEROS_KEYTAB));
+        URI url = new java.net.URI(conf.get(XLearningConfiguration.XLEARNING_KERBEROS_KEYTAB));
+        FileSystem fs = FileSystem.get(url, new Configuration());
+        setupTokens(fs);
     } catch (Exception e) {
-      LOG.error(e);
+      LOG.error("Use kerberos token has error", e);
     }
-    FileSystem fs = FileSystem.get(url, new Configuration());
     ContainerLaunchContext amContainer = ContainerLaunchContext.newInstance(
-        localResources, appMasterEnv, appMasterLaunchcommands, null, setupTokens(fs), null);
+        localResources, appMasterEnv, appMasterLaunchcommands, null, tokens, null);
 
     applicationContext.setAMContainerSpec(amContainer);
 
