@@ -404,6 +404,18 @@ public class Client {
         }
         LOG.info("Apply for ps vcores " + psVcores);
       }
+
+      String principal = conf.get(XLearningConfiguration.XLEARNING_KERBEROS_PRINCIPAL, XLearningConfiguration.DEFAULT_XLEARNING_KERBEROS_PRINCIPAL);
+      String keytab = conf.get(XLearningConfiguration.XLEARNING_KERBEROS_KEYTAB, XLearningConfiguration.DEFAULT_XLEARNING_KERBEROS_KEYTAB);
+
+      if (principal != null && !"".equals(principal)) {
+          LOG.info("Apply for ps principal " + principal);
+      }
+
+        if (keytab != null && !"".equals(keytab)) {
+            LOG.info("Apply for ps keytab " + keytab);
+        }
+
       int limitNode = conf.getInt(XLearningConfiguration.XLEARNING_EXECUTE_NODE_LIMIT, XLearningConfiguration.DEFAULT_XLEARNING_EXECUTENODE_LIMIT);
       if (workerNum + psNum > limitNode) {
         throw new RequestOverLimitException("Container num requested over the limit " + limitNode);
@@ -764,13 +776,14 @@ public class Client {
     capability.setMemory(conf.getInt(XLearningConfiguration.XLEARNING_AM_MEMORY, XLearningConfiguration.DEFAULT_XLEARNING_AM_MEMORY));
     capability.setVirtualCores(conf.getInt(XLearningConfiguration.XLEARNING_AM_CORES, XLearningConfiguration.DEFAULT_XLEARNING_AM_CORES));
     applicationContext.setResource(capability);
+    String principal = conf.get(XLearningConfiguration.XLEARNING_KERBEROS_PRINCIPAL, XLearningConfiguration.DEFAULT_XLEARNING_KERBEROS_PRINCIPAL);
     ByteBuffer tokens = null;
     try {
-        URI url = new java.net.URI(conf.get(XLearningConfiguration.XLEARNING_KERBEROS_KEYTAB));
+        URI url = new java.net.URI(principal);
         FileSystem fs = FileSystem.get(url, new Configuration());
         setupTokens(fs);
     } catch (Exception e) {
-      LOG.error("Use kerberos token has error", e);
+      LOG.error("Use kerberos token path: " + principal + " has error", e);
     }
     ContainerLaunchContext amContainer = ContainerLaunchContext.newInstance(
         localResources, appMasterEnv, appMasterLaunchcommands, null, tokens, null);
