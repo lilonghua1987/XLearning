@@ -179,6 +179,15 @@ public class XLearningConfiguration extends YarnConfiguration {
 
   public static final Boolean DEFAULT_XLEARNING_INTERRESULT_SAVE_INC = false;
 
+  //kerberos token
+  public static final String XLEARNING_KERBEROS_PRINCIPAL = "xlearning.kerberos.principal";
+
+  public static final String DEFAULT_XLEARNING_KERBEROS_PRINCIPAL = "";
+
+  public static final String XLEARNING_KERBEROS_KEYTAB = "xlearning.kerberos.keytab";
+
+  public static final String DEFAULT_XLEARNING_KERBEROS_KEYTAB = "";
+
 
   public static final String[] DEFAULT_XLEARNING_APPLICATION_CLASSPATH = {
       "$HADOOP_CONF_DIR",

@@ -12,14 +12,17 @@ import org.apache.commons.cli.ParseException;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.mapred.InputFormat;
 import org.apache.hadoop.mapred.OutputFormat;
+import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.protocolrecords.*;
@@ -35,6 +38,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,6 +63,8 @@ public class Client {
   private final Map<String, String> appMasterUserEnv;
   private final Map<String, String> containerUserEnv;
 
+  private final Credentials credentials;
+
   private Client(String[] args) throws IOException, ParseException, ClassNotFoundException {
     this.conf = new XLearningConfiguration();
     this.dfs = FileSystem.get(conf);
@@ -71,6 +77,7 @@ public class Client {
     JOB_FILE_PERMISSION = FsPermission.createImmutable((short) 0644);
     this.appMasterUserEnv = new HashMap<>();
     this.containerUserEnv = new HashMap<>();
+    this.credentials = UserGroupInformation.getCurrentUser().getCredentials();
 
   }
 
@@ -110,6 +117,15 @@ public class Client {
     conf.setClass(XLearningConfiguration.XLEARNING_OUTPUTFORMAT_CLASS, clientArguments.outputFormatClass, OutputFormat.class);
     conf.set(XLearningConfiguration.XLEARNING_STREAM_EPOCH, String.valueOf(clientArguments.streamEpoch));
     conf.setBoolean(XLearningConfiguration.XLEARNING_TF_EVALUATOR, clientArguments.tfEvaluator);
+
+    if (clientArguments.principal != null && !clientArguments.principal.equals("")) {
+      conf.set(XLearningConfiguration.XLEARNING_KERBEROS_PRINCIPAL, clientArguments.principal);
+    }
+
+    if (clientArguments.keytab != null && !clientArguments.keytab.equals("")) {
+      conf.set(XLearningConfiguration.XLEARNING_KERBEROS_KEYTAB, clientArguments.keytab);
+    }
+
 
     if (clientArguments.queue == null || clientArguments.queue.equals("")) {
       clientArguments.queue = appSubmitterUserName;
@@ -393,6 +409,36 @@ public class Client {
         throw new RequestOverLimitException("Container num requested over the limit " + limitNode);
       }
     }
+  }
+
+  /**
+   * setup security token given current user
+   * @return the ByeBuffer containing the security tokens
+   * @throws IOException
+   */
+  private ByteBuffer setupTokens(FileSystem fs) throws IOException {
+    DataOutputBuffer buffer = new DataOutputBuffer();
+    String loc = System.getenv().get("HADOOP_TOKEN_FILE_LOCATION");
+    if ((loc != null && loc.trim().length() > 0) ||  (!UserGroupInformation.isSecurityEnabled())) {
+      this.credentials.writeTokenStorageToStream(buffer);
+    } else {
+      // Note: Credentials class is marked as LimitedPrivate for HDFS and MapReduce
+      Credentials credentials = new Credentials();
+      String tokenRenewer = conf.get(YarnConfiguration.RM_PRINCIPAL);
+      if (tokenRenewer == null || tokenRenewer.length() == 0) {
+        throw new IOException(
+                "Can't get Master Kerberos principal for the RM to use as renewer");
+      }
+      // For now, only getting tokens for the default file-system.
+      final org.apache.hadoop.security.token.Token<?> tokens[] = fs.addDelegationTokens(tokenRenewer, credentials);
+      if (tokens != null) {
+        for (org.apache.hadoop.security.token.Token<?> token : tokens) {
+          LOG.info("Got dt for " + fs.getUri() + "; " + token);
+        }
+      }
+      credentials.writeTokenStorageToStream(buffer);
+    }
+    return ByteBuffer.wrap(buffer.getData(), 0, buffer.getLength());
   }
 
   private boolean submitAndMonitor() throws IOException, YarnException {
@@ -718,8 +764,15 @@ public class Client {
     capability.setMemory(conf.getInt(XLearningConfiguration.XLEARNING_AM_MEMORY, XLearningConfiguration.DEFAULT_XLEARNING_AM_MEMORY));
     capability.setVirtualCores(conf.getInt(XLearningConfiguration.XLEARNING_AM_CORES, XLearningConfiguration.DEFAULT_XLEARNING_AM_CORES));
     applicationContext.setResource(capability);
+    URI url = null;
+    try {
+      url = new java.net.URI(conf.get(XLearningConfiguration.XLEARNING_KERBEROS_KEYTAB));
+    } catch (Exception e) {
+      LOG.error(e);
+    }
+    FileSystem fs = FileSystem.get(url, new Configuration());
     ContainerLaunchContext amContainer = ContainerLaunchContext.newInstance(
-        localResources, appMasterEnv, appMasterLaunchcommands, null, null, null);
+        localResources, appMasterEnv, appMasterLaunchcommands, null, setupTokens(fs), null);
 
     applicationContext.setAMContainerSpec(amContainer);
 
@@ -750,8 +803,7 @@ public class Client {
       throw new RuntimeException("Application submitAndMonitor failed! Exception: " + e);
     }
 
-    boolean isApplicationSucceed = waitCompleted();
-    return isApplicationSucceed;
+    return waitCompleted();
   }
 
   private boolean waitCompleted() throws IOException, YarnException {

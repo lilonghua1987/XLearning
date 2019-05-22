@@ -51,6 +51,8 @@ class ClientArguments {
   Boolean isRenameInputFile;
   String dockerImage;
   String containerType;
+  String principal;
+  String keytab;
   public Boolean tfEvaluator;
   public Boolean userClasspathFirst;
   public int streamEpoch;
@@ -88,6 +90,8 @@ class ClientArguments {
     userPath = "";
     dockerImage = "";
     containerType = "";
+    principal = "";
+    keytab = "";
     priority = XLearningConfiguration.DEFAULT_XLEARNING_APP_PRIORITY;
     queue = "";
     userClasspathFirst = XLearningConfiguration.DEFAULT_XLEARNING_USER_CLASSPATH_FIRST;
@@ -446,6 +450,14 @@ class ClientArguments {
 
     if(cliParser.hasOption("container-type")){
       containerType = cliParser.getOptionValue("container-type");
+    }
+
+    if(cliParser.hasOption("principal")){
+      principal = cliParser.getOptionValue("principal");
+    }
+
+    if(cliParser.hasOption("keytab")){
+      keytab = cliParser.getOptionValue("keytab");
     }
 
     appMasterJar = JobConf.findContainingJar(ApplicationMaster.class);
