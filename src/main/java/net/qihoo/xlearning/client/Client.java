@@ -433,6 +433,7 @@ public class Client {
     String loc = System.getenv().get("HADOOP_TOKEN_FILE_LOCATION");
     if ((loc != null && loc.trim().length() > 0) ||  (!UserGroupInformation.isSecurityEnabled())) {
       this.credentials.writeTokenStorageToStream(buffer);
+      LOG.info("Has Kerberos conf " + loc);
     } else {
       // Note: Credentials class is marked as LimitedPrivate for HDFS and MapReduce
       Credentials credentials = new Credentials();
